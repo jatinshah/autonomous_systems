@@ -1,0 +1,34 @@
+
+Software that you need to install for FVision to work:
+
+a) Frp (need an account on haskell.org)
+
+cvs -d haskell.org:/home/cvs co frp 
+
+b) FVision (need the cips account)
+
+cvs -d cips@peregrine.cs.jhu.edu:/users/rtfm7/cips/repository co FVision
+
+c) Hugs.  Probably NOT the Feb 01 release!  Make sure Hugs is linked with g++: either 
+   change LD to g++ in the Makefile or override it when calling make
+
+d) XVision2 (need the xvis account)
+
+cvs -d xvis@pong.cs.jhu.edu:/home/xvis/repository co XVision2
+
+e) Green card.  Install off the rpm accessable from haskell.org - you'll need this to
+   compile.
+
+f) SOE Graphics.  There is a tar file with everything available at 
+  http://haskell.org/NewSOEGraphics.tar
+
+You need to set the Hugs search path to include FVision, frp/src, and SOEGraphics
+
+Hugs must use a pre-processor to load this version of the graphics library.  The option is 
+  --F"$GRAPHICS_DIR/hscpp -d__HUGS__"
+where GRAPHICS_DIR is the SOE graphics directory (make sure you see hscpp there).
+
+Building: the Makefile in FVision needs to be changed to give it the path to XVision2.  You need
+to make XVision2 and run make in FVision.
+
+Testing: there are some tests in FVTests you can run to see whether the system works.

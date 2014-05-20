@@ -1,0 +1,45 @@
+D/Documentation////
+D/Garbage////
+D/Test////
+D/demos////
+/.cvsignore/1.3/Mon May 28 22:27:27 2001//
+/Animate.hs/1.2/Sat Jun  2 01:39:05 2001//
+/Box.hs/1.2/Sat Jun  2 01:39:05 2001//
+/Draw.hs/1.6/Sat Jun  2 01:39:05 2001//
+/Edge.hs/1.2/Sat Jun  2 01:39:05 2001//
+/Error.hs/1.3/Sat Jun  2 01:39:05 2001//
+/FVControl.hs/1.3/Sat Jun  2 01:39:05 2001//
+/FVTests.hs/1.2/Sat Jun  2 01:39:05 2001//
+/FVTrackers.hs/1.3/Sat Jun  2 01:39:05 2001//
+/FVTypes.hs/1.3/Sat Jun  2 01:39:05 2001//
+/FVUtils.hs/1.2/Sat Jun  2 01:39:05 2001//
+/FVision.hs/1.19/Sat Jun  2 01:39:05 2001//
+/FVisionStdDIS.gc/1.1/Sat Jun  2 01:39:05 2001//
+/FXVision2.hs/1.2/Sat Jun  2 01:39:05 2001//
+/GreenCard.h/1.1/Sat Jun  2 01:39:05 2001//
+/INSTALL/1.2/Sat Jun  2 01:39:05 2001//
+/Image.hs/1.8/Sat Jun  2 01:39:05 2001//
+/Intersect.hs/1.2/Sat Jun  2 01:39:05 2001//
+/Makefile/1.16/Sat Jun  2 01:39:06 2001//
+/Makefile.xvision1/1.1/Sat Jun  2 01:39:06 2001//
+/Matrix.hs/1.2/Sat Jun  2 01:39:06 2001//
+/NXVision2.c/1.2/Sat Jun  2 01:39:06 2001//
+/NXVision2.gc/1.16/Sat Jun  2 01:39:06 2001//
+/OldGeometry.hs/1.3/Sat Jun  2 01:39:06 2001//
+/Overload.hs/1.1.1.1/Sat Jun  2 01:39:06 2001//
+/SP.hs/1.6/Sat Jun  2 01:39:06 2001//
+/SPtalkcode.hs/1.3/Sat Jun  2 01:39:06 2001//
+/SPtalkcode2.hs/1.2/Sat Jun  2 01:39:06 2001//
+/SSD.hs/1.2/Sat Jun  2 01:39:06 2001//
+/Segmentation.hs/1.7/Sat Jun  2 01:39:06 2001//
+/Test.hs/1.12/Sat Jun  2 01:39:06 2001//
+/XVBaseTypes.hs/1.8/Sat Jun  2 01:39:06 2001//
+/XVTypes.hs/1.9/Sat Jun  2 01:39:06 2001//
+/XVWindow.hs/1.10/Sat Jun  2 01:39:06 2001//
+/XVision.gc/1.9/Sat Jun  2 01:39:06 2001//
+/XVision2.gc/1.6/Sat Jun  2 01:39:06 2001//
+/aux.cc/1.7/Sat Jun  2 01:39:06 2001//
+/aux.h/1.6/Sat Jun  2 01:39:06 2001//
+/test.mpg/1.1/Sat Jun  2 01:39:12 2001//
+/test2.mpg/1.1/Sat Jun  2 01:40:08 2001//
+/vhugs/1.3/Sat Jun  2 01:40:08 2001//

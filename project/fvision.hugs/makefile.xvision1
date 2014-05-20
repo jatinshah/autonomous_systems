@@ -1,0 +1,108 @@
+################################################################
+# Makefile for Haskell related work
+#
+# Note: This Makefile is not linked into the main Makefile tree
+################################################################
+
+default: XVision.so
+
+# GC_DIR	 = /usr/local/share/lib/greencard
+# HUGS_DIR = /usr/local/share/shareware/hugs98
+# GREENCARD  = green-card --include-dir /usr/local/share/lib/greencard --target hugs
+#XV_DIR	 = ../../XVision
+
+GC_DIR	 = $(HOME)/local/green-card
+HUGS_DIR = $(HOME)/local/hugs
+GREENCARD  = runhugs -h1m $(GC_DIR)/src/GreenCard.lhs --include-dir $(GC_DIR)/lib/hugs --target hugs
+XV_DIR	 = $(HOME)/local/XVision
+
+XV_LIBS += $(XV_DIR)/lib/libdeviceparse.a
+XV_LIBS += $(XV_DIR)/lib/libXVSSD.a   # just for smoothDx
+XV_LIBS += $(XV_DIR)/lib/libXVCons.a
+XV_LIBS += $(XV_DIR)/lib/libXVDevs.a
+XV_LIBS += $(XV_DIR)/lib/libXVCons.a
+XV_LIBS += $(XV_DIR)/lib/libXVision.a
+XV_LIBS += $(XV_DIR)/lib/libXVTools.a
+XV_LIBS += $(XV_DIR)/lib/libXVCons.a
+XV_LIBS += $(XV_DIR)/lib/libXVEdge.a
+XV_LIBS += $(XV_DIR)/lib/libmpeg.a
+
+# XV_OBJS	+= $(LIBDIR)/libXVPipe.a   
+# XV_OBJS	+= $(LIBDIR)/libXVSSD.a    
+# XV_OBJS	+= $(LIBDIR)/libXVBlobs.a  
+# XV_OBJS	+= $(LIBDIR)/libXVEdge.a   
+# XV_OBJS	+= $(LIBDIR)/libXVSnake.a
+# XV_OBJS	+= $(LIBDIR)/libXVCons.a   
+# XV_OBJS	+= $(LIBDIR)/libdeviceparse.a
+# XV_OBJS	+= $(LIBDIR)/libXVDevs.a   
+# XV_OBJS	+= $(LIBDIR)/libXVCons.a   # deliberate duplicate - blech!
+# XV_OBJS	+= $(LIBDIR)/libXVision.a
+# XV_OBJS	+= $(LIBDIR)/libXVTools.a
+# XV_OBJS	+= $(TOP)/support/mpeg_lib/libmpeg.a
+
+LIBS += -L/usr/X11R6/lib -lpthread -lX11 -lXdmcp -lXext
+
+CC = g++ -Wall
+
+CXXFLAGS = -g -O0 -Wall -Wno-unused
+
+CXXFLAGS += -fguiding-decls
+
+CPPFLAGS += -I$(HUGS_DIR)/src
+CPPFLAGS += -I$(XV_DIR)/src/SSD
+CPPFLAGS += -I$(XV_DIR)/src/Tools
+CPPFLAGS += -I$(XV_DIR)/src/Edges
+CPPFLAGS += -I$(XV_DIR)/src/Framework
+CPPFLAGS += -I$(XV_DIR)/config_files
+CPPFLAGS += -I$(XV_DIR)/support/mpeg_lib
+CPPFLAGS += -I$(XV_DIR)/examples/utils
+CPPFLAGS += -I$(XV_DIR)/support/bt8x8
+
+CPPFLAGS += -I$(XV_DIR)/src/Consoles
+CPPFLAGS += -I$(XV_DIR)/src/Devices
+CPPFLAGS += -I$(XV_DIR)/support/meteor-1.4c
+
+################################################################
+# Greencard
+################################################################
+
+GC_FILES	= $(wildcard *.gc)
+GC_CC_FILES	= $(addsuffix .cc,$(basename $(GC_FILES)))
+GC_O_FILES	= $(addsuffix .o, $(basename $(GC_FILES)))
+GC_SO_FILES	= $(addsuffix .so,$(basename $(GC_FILES)))
+GC_HS_FILES	= $(addsuffix .hs,$(basename $(GC_FILES)))
+
+# For understanding compiler warnings and debugging, they're invaluable
+# And keeping the .o files reduces rebuild time
+.PRECIOUS: $(GC_CC_FILES) $(GC_O_FILES)
+
+%.hs %.cc: %.gc
+	$(GREENCARD) $< --output-c $(basename $<).cc
+
+#%.so:	%.o $(XV_LIBS)
+XVision.so:	XVision.o $(XV_LIBS)
+	$(CXX) -shared $< -o $@ $(XV_LIBS) $(LIBS)
+
+clean::
+	rm -f $(GC_CC_FILES) $(GC_O_FILES) $(GC_SO_FILES) $(GC_HS_FILES)
+veryclean:: clean
+	rm -f *~
+
+################################################################
+# TeX
+################################################################
+
+%.ps	: %.dvi
+	  dvips $< -o $*.ps
+
+%.dvi	: %.tex 
+	  latex $<
+
+clean	::
+	rm -f *.aux *.dvi *.log
+veryclean:: clean
+	rm -f *~
+
+################################################################
+# End of Makefile
+################################################################

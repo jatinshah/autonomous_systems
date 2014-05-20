@@ -1,0 +1,227 @@
+
+
+module NXVision2 where
+
+import Prelude hiding (sum)
+import FVisionStdDIS
+import Xlib( Display )
+
+----------------------------------------------------------------
+-- Copied from X.gc in graphics lib - must match exactly
+----------------------------------------------------------------
+
+%#include <X11/X.h>
+%#include <X11/Xlib.h>
+
+type XID      = Word32
+%dis xID      x = word32 ({XID}      x)
+type Drawable   = XID
+%dis drawable x = xID x
+
+type Mask     = Word32
+%dis mask     x = word32 ({unsigned int} x)
+type EventMask = Mask
+%dis eventMask x = mask x
+
+-- newtype Display    = Display    Addr
+%dis display x    = Display    (addr ({Display*}     x))
+
+----------------------------------------------------------------
+-- End of X.gc copy
+----------------------------------------------------------------
+
+%#include "aux.h"
+
+----------------------------------------------------------------
+-- Garbage collection
+--
+-- Any "large" objects on the C++ side should be "registered" here
+-- (by calling inc and dec) so that Haskell knows how many objects
+-- it has and can garbage collect when it has too many.
+----------------------------------------------------------------
+
+%C
+% static const int hardLimit  = 2000; // how many we allow before we abort completely
+% static int softLimit  = 1;    // how many we allow before next GC
+% static int count  = 0;        // how many we have at the moment
+% 
+% static int inline max2(int a, int b) { return (a<=b) ? b : a; }
+%
+% void inc(int d) 
+% { 
+%   count += d; 
+%   //putchar('+');
+%   if (count >= softLimit) { 
+%         hugs->garbageCollect();
+%         if (count >= hardLimit) { printf("Hard limit exceeded - possible space leak?\n"); exit(1); }
+%         softLimit = max2(softLimit,count + 1000);
+%         //printf("%d objects live - setting soft limit to %d\n", count, softLimit);
+%   } 
+% }
+% 
+% void dec(int d)
+% {
+%   count -= d;
+%   //putchar('-');
+% }
+
+%fun garbageCollect :: IO ()
+%code hugs->garbageCollect()
+
+----------------------------------------------------------------
+-- 
+----------------------------------------------------------------
+
+newtype ImageRGB = ImageRGB ForeignObj
+%dis imageRGB x = ImageRGB (%Foreign {imagep} x {destroyImage})
+
+newtype XVWindowX = XVWindowX ForeignObj
+%dis xVWindowX x = XVWindowX (%Foreign {windowp} x {destroyWindow})
+
+newtype MPEG = MPEG ForeignObj
+%dis mPEG x = MPEG (%Foreign {mpegp} x {destroyMPEG})
+
+newtype Video = Video ForeignObj
+%dis video x = Video (%Foreign {videop} x {destroyVideo})
+
+newtype ColorSelector = ColorSelector ForeignObj
+%dis colorSelector x = ColorSelector (%Foreign {colorSelectorp} x {destroyColorSelector})
+
+newtype SSDStepper = SSDStepper ForeignObj
+%dis sSDStepper x = SSDStepper (%Foreign {ssdTransStepperp} x {destroySSDTransStepper})
+
+----------------------------------------------------------------
+-- 
+----------------------------------------------------------------
+
+%fun openMPEG :: String -> IO Video
+
+%fun openBTTV :: String -> IO Video
+
+%fun openFireWire :: String -> IO Video
+
+%fun openVideo :: String -> IO Video
+
+%fun openWindow :: Video -> EventMask -> Int -> Int -> IO XVWindowX
+
+%fun nextImage :: Video -> IO ImageRGB
+
+%fun showImage :: ImageRGB -> XVWindowX -> IO ()
+
+%fun flushWindow :: XVWindowX -> IO ()
+
+%fun getXDrawable :: XVWindowX -> IO Drawable
+
+%fun getXDisplay :: XVWindowX -> Display
+
+-- Int parameters are : (x,y,width,height)
+-- (x,y) is the upper left corner.
+
+%fun getRegion :: ImageRGB -> Int -> Int -> Int -> Int -> ImageRGB
+
+
+-- Int parameters are : (x,y,width,height)
+-- (x,y) is the center of the image this time.
+-- Double is the rotation angle. 
+
+%fun getRegionRotated :: ImageRGB -> Int -> Int -> Int -> Int -> Double -> ImageRGB
+
+%fun imageSize :: ImageRGB -> (Int, Int)
+%code imageSizeAux(arg1, &res1, &res2)
+
+%fun getColorSelector :: ImageRGB -> ColorSelector
+
+-- Compares two images based on image difference.
+
+%fun compareImageInt :: ImageRGB -> ImageRGB -> Int
+
+-------------------------------------------------------------------
+-- All SSD stuff works with the state translation, no rotation yet.
+-------------------------------------------------------------------
+
+-- Creates an SSD stepper from a given reference image
+
+%fun createSSDTransStepper :: ImageRGB -> SSDStepper
+
+-- Returns the error of an SSD stepper on a given image.
+-- The image should have the same size with the reference image.
+
+%fun compareSSDTrans :: SSDStepper -> ImageRGB -> Double
+
+-- Returns (deltax, deltay, residual(error))
+-- The image you passed and the reference image you used when you created
+-- the stepper with createSSDTransStepper should have the sam size.
+-- TO DO : Rotation will be added. But for this the old state will be also
+-- passed and it isn't clear for now how the different states of XVision2 will
+-- be abstracted in FVision.
+
+%fun stepSSD :: SSDStepper -> ImageRGB -> (Double, Double, Double)
+%code stepSSDTransAux(arg1, arg2, &res1, &res2, &res3)
+ 
+
+-- returns the center of the blob and radius (x_center, y_center, radius)
+-- coordinates are relative to the subimage passed, not the whole frame.
+
+%fun stepBlob :: ImageRGB -> ColorSelector -> (Float, Float, Float)
+%code stepBlobAux(arg1, arg2,&res1, &res2, &res3)
+
+-- returns the upper left corner of the blob and its dimensions
+-- (x_corner, y_corner, width, height)
+-- coordinates are relative to the subimage passed, not the whole frame.
+-- returns negative values for width and height if no blob is detected.
+
+%fun stepBlob2 :: ImageRGB -> ColorSelector -> (Float, Float, Float, Float)
+%code stepBlobAux2 (arg1, arg2, &res1, &res2, &res3, &res4)
+
+
+%fun blobRegions_ :: ColorSelector -> ImageRGB -> (Addr,Addr,Addr,Addr,Int)
+%code blobRegionsAux (arg1, arg2, &res1, &res2, &res3, &res4, &res5)
+
+-- similar to stepBlob2, but this time returns all the blobs in a list.
+
+blobRegions :: ColorSelector -> ImageRGB -> [(Double,Double,Double,Double)]
+blobRegions c im = unmarshall_doubles_andZip (blobRegions_ c im)
+
+unmarshall_doubles_andZip :: (Addr,Addr,Addr,Addr,Int) -> 
+                             [(Double,Double,Double,Double)]
+unmarshall_doubles_andZip (p1,p2,p3,p4,size) = fills [] 0
+  where
+    toDouble :: Float -> Double
+    toDouble = fromInt . round
+    fills rs i = if i < size then let r = (d1,d2,d3,d4)
+                                      d1 = toDouble (readFloatAddr_ p1 i)
+                                      d2 = toDouble (readFloatAddr_ p2 i)
+                                      d3 = toDouble (readFloatAddr_ p3 i)
+                                      d4 = toDouble (readFloatAddr_ p4 i)
+                                  in 
+                                      fills (r:rs) (i+1)
+                             else reverse rs
+
+%fun readFloatAddr_ :: Addr -> Int -> Float
+%call (addr ({float *} p)) (int i)
+%code res1 = p[i]
+
+
+%fun readIntAddr_ :: Addr -> Int 
+%call (addr ({int *} i)) 
+%code res1 = i
+
+-- returns (deltax, angle, residual(error))
+-- passed image should be rotated and sized such that it has an almost vertical
+-- edge near its center.
+-- 
+-- deltax is the translation among x axis of the rotated image.
+-- angle is between the edge and the vertical line (vertical according to the
+-- rotated image) passing from the center of the image. 
+-- this is consistent with getRegionRotated, so if you already rotated the 
+-- subimage alfa degrees and stepEdge returns beta, just rotate the image 
+-- alfa+beta at the next frame.
+-- if you translate your subimage 'deltax' units and rotate it 'angle' degrees
+-- and the edge stays at the same position, then the edge in the new 
+-- (translated+rotated) subimage will be vertical and at the center.
+
+
+%fun stepEdge :: ImageRGB -> (Double,Double,Double)
+%code stepEdgeAux (arg1, &res1, &res2, &res3)
+
+

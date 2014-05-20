@@ -1,0 +1,1226 @@
+\documentstyle[11pt]{article}
+
+\include{stdlib}
+
+\begin{document}
+
+\title{%
+  Notes on XVision%
+}
+
+\author{Alastair Reid, Greg Hager\\
+Yale University\\
+Department of Computer Science\\
+New Haven, CT 06520\\
+{\tt \{reid-alastair,hager-greg\}@cs.yale.edu}}
+
+%\date{8 April, 1997}
+
+\maketitle
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{README}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This document is a collection of notes made by Greg, Alastair and
+Chris while revising the XVision design.  The basic mode of use should
+be write only: a comment stays there until some kind of response is
+written into the comment; only the author of a comment should delete
+it or reword it.  
+
+To make it easy to search through diffs, we should avoid reorganising
+comments too much except when we all agree not to make changes while
+someone goes in there and cleans things up.  The basic goal of this
+document is to make sure we write everything down.  I don't think we
+need to worry too much about organisation and stuff like that for now
+- as long as we're writing everything in here.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Plan}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Note: in this section, I use itemize when there's no ordering
+or priority and enumerate when there is an ordering.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Done}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{enumerate}
+\item
+  Hacked up a version of get\_region which works with a static
+  Image.  The code isn't too great but we'll be deleting it soon 
+  anyway.
+
+\item
+  Force a GC whenever there's more than m objects allocated
+  (adjusting m according to how many were still needed after
+   last GC)
+
+\item
+  Use the deviceparse library and the Video class rather than
+  trying to use the Meteor class directly.
+  This avoids the need for conditional compilation.
+
+\item
+  Wrote a ``baby duck simulator'' that follows ``Mommy'' round the room.
+
+\item
+  Use Haskell's type system to express the difference between
+  packed images (ie multiband images) and unpacked images (ie single 
+  band images).
+
+\item
+Add some infrastructure:
+
+\begin{description}
+\item[Greg]
+\begin{verbatim}
+I spent an hour this evening fiddling with FVision.  I can certainly
+get image processing algorithms to work, however my ultimate
+conclusion was that right now my "hands are tied" compared to XVision.
+Part of that is newness of the language, but a large part is because
+of the lack of "tracking" infrastructure.  That is, I was fiddling a
+bit with a color tracker.  How would I do this in XVision?  Well, I'd
+derive a class from BasicFeature, add an update function (which I've
+mostly written in Haskell already), do a bit with display so I could
+see what was going on, and then write a small chunk of test code that
+opened a device, let me initialize the thing, and then went off and
+tracked.
+
+In principle, all of this is possible with what we've wired in so far,
+however the following "problems" seem to exist:
+
+   1. As we discussed earlier, image sequences as lists are a nice
+      abstraction in some ways, but they don't seem practical over the
+      long haul.  In the long run, we need to capture the idea of
+      driving an image acquisition operation (e.g. grab) from the
+      current state of a tracker and moving only that data into the
+      pipe.  Seems like there needs to be a more refined notion of a
+      video source (probably in the IO monad) which offers selective
+      acquisition in a consistent and simple fashion.
+
+      For a while I was willing to forget about that in the interests
+      of just doing prototyping, but then I realized that this is
+      pretty fundamental to the whole system design, so there should
+      be a way of capturing it.
+
+   2. Right now in Haskell I'd have to write an explicit recursion in
+      order to get the tracking cycle going.  Clearly, this is generic
+      and can be factored out.  Likewise, there are no simple display
+      tools which are easy to drop in so that I can watch what's going
+      on.  
+
+   3. As soon as we move away from image sequences, then the whole
+      notion of sequence and coordinating multiple trackers (branching
+      pipes) seems like it'll become much more difficult.  XVision
+      puts some requirements on the tracking graph to make it possible
+      to figure out how to run up and down and get everyone updated
+      before advancing to the next "frame" of data.
+
+Soooo... I'm having fun, but all the same I'd like to just sit down
+and try to flesh out a little tracking framework in terms of types and
+classes so that my programming efficiency goes up....
+\end{verbatim}
+
+\item[Alastair]
+Added Pipes.hs which defines this stuff and many of the standard
+arithmetic ops too.
+
+\begin{verbatim}
+runPipe :: Pipe (IO a) -> IO ()
+runPipeGC :: Pipe (IO a) -> IO ()
+
+time :: Pipe Time
+
+lift0 :: a -> Pipe a
+lift1 :: (a -> b) -> (Pipe a -> Pipe b)
+lift2 :: (a -> b -> c) -> (Pipe a -> Pipe b -> Pipe c)
+lift3 :: (a -> b -> c -> d) -> (Pipe a -> Pipe b -> Pipe c -> Pipe d)
+
+liftIO0 :: IO a -> Pipe a
+liftIO1 :: (a -> IO b) -> (Pipe a -> Pipe b)
+liftIO2 :: (a -> b -> IO c) -> (Pipe a -> Pipe b -> Pipe c)
+
+-- delay by one step using default value at first step
+delay :: a -> Pipe a -> Pipe a
+-- delay by one step by duplicating first value
+delay' :: Pipe a -> Pipe a
+-- advance by one step
+advance	:: Pipe a -> Pipe a
+
+scanPipe :: (a -> a -> a) -> a -> Pipe a -> Pipe a
+scanPipe1 :: (a -> a -> a) -> Pipe a -> Pipe a
+
+integral :: (Num a) => a -> Pipe a -> Pipe a
+-- I don't think it's a good idea to use this
+video :: String -> Pipe Image_RGB
+-- not too sure abotu this either
+window :: Console -> (Int,Int) -> String -> Pipe Image_RGB -> Pipe (IO ())
+\end{verbatim}
+\end{description}
+
+\item
+Extend the Haskellised SSD algorithm to cover all the other things
+\begin{itemize}
+\item
+Make matrix ops available to Haskell
+
+\item
+Add support for other parameters:
+\begin{itemize}
+\item rotation
+\end{itemize}
+
+\item
+Use current transformation to fix the deltas coming out of ssd.
+Without this, ssd becomes very unhappy when you rotate the camera
+too far because it uses an x displacement to try to fix a vertical
+disparity and vice versa.
+
+\item
+Calculate (and use!) residuals
+
+\end{itemize}
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{UnDone}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+A lot of the SSD issues have been resolved (or, at least, discovered).
+Time to look at:
+\begin{itemize}
+\item other kinds of trackers 
+\begin{itemize}
+\item blobs
+\item color blobs
+\item edge detection
+\item contour tracking
+\end{itemize}
+
+\item how to combine multiple trackers
+
+Incidentally, notice that pyramid SSD trackers is just a special case
+of combining trackers.  I don't think there's any reason (theoretical
+or practical) to treat it as a special case.
+
+Greg and I just talked about this --- here's what happens in XVision
+at the moment.  On every frame, each tracker sends an updated position
+up the tracker tree.  The root of the tree combines its subtree info
+into an answer (which it displays somehow or uses to move the robot or
+...)  and sends some data down the tree to its children.
+
+In Haskell, this should look like this (mostly ignoring residuals):
+\begin{verbatim}
+type Tracker up down = Pipe down -> Pipe up
+-- in C++ it'd probably just be a pair of pipes
+
+-- use this guy on the root of the tree
+runTracker :: (up -> down) -> Tracker up down -> Pipe up
+runTracker f t = let u = t d
+                     d = lift1 f u
+                 in u
+
+ssd :: <initialisation args> -> Tracker Position Position
+ssd down_posn = up_posn
+ where
+  error    = lift2 diffImage (lift0 ref0) pic
+  pic      = liftIO1 (grab v s sz) $ down_posn
+  (delta,residual) = drop2 $ lift1 (ssd ref0) pic
+  up_posn  = integral posn0 delta
+  
+
+-- a line through a position stretching to infinity in either direction
+type InfLine = (Position,Angle)
+
+edge :: Position -> Tracker InfLine
+edge down_pose = ...
+
+-- combine two line trackers into a position tracker
+intersect :: Tracker InfLine -> Tracker InfLine -> Tracker Position
+intersect t1 t2 down_posn = up_posn
+ where
+  line1 = t1 down1
+  line2 = t2 down2
+  up_posn = lift2 line_intersection line1 line2
+  down1 = lift2 combine_somehow line1 down_posn
+  down2 = lift2 combine_somehow line2 down_posn
+\end{verbatiM}
+
+Obviously, we're going to build lots of composite trackers that look
+roughly like \verb+intersect+, so we'll probably want to abstract 
+out the functions for combining up data and for splitting down data.
+Presumably this means we end up with a family of functions like this:
+
+\begin{verbatim}
+-- warning: these types are kinda scrogged.
+-- things will be much easier to figure out once we actually
+-- do this stuff.
+track1 :: (u -> d) -> (d -> u) -> Tracker u d -> Tracker u d
+track2 :: (u -> d1) -> (u -> d2)) -> ((d1,d2) -> u) -> 
+          Tracker u d1 -> Tracker u d2 -> Tracker u d
+...
+\end{verbatim}
+
+\item how to combine trackers with robots
+
+\item how to run different parts of the system at different speeds
+  Pipe.subsample and Pipe.oversample are initial moves in this
+  direction.
+
+\item
+Error recovery
+
+If we try to track an image that goes off the screen, we lose.
+Where to insert the code that guards against this?
+
+Something to do with window edge effects Compute a weighting matrix to
+handle getting rid of window edge effects
+
+\item performance issues: 
+\begin{itemize}
+\item memory usage
+\item cache usage
+\item temporal sharing
+\end{itemize}
+\end{itemize}
+
+
+\item
+SSD
+\begin{itemize} % SSD
+\item
+Don't sample off the edge of the screen.
+Use occlusion at the low level (to prevent errors) and get semi-useful data.
+Use some other mechanism at the high level.
+
+\item
+Extend the Haskellised SSD algorithm to cover all the other things
+
+\begin{itemize}
+\item scale (this might help overcome the scaling problems we get from 
+      rotations - but it'd be better to fix this directly)
+\item general affine transformations (scale, shear, aspect ratio)
+\item illumination
+\item occlusion
+\end{itemize}
+
+\item
+Create a new C++ class SSDCore that looks something like this:
+\begin{verbatim}
+
+class SSDCore {
+private:
+  Matrix M;
+public:
+  SSDCore(Image refImage);
+  ~SSDCore();
+
+  void   extendMatrix(Tensor);
+  Vector apply(Image);
+  Image  residualMatrix(); 
+  double residual() { return sum(residualMatrix()) / size(residualMatrix()); }
+}
+\end{verbatim}
+
+Note that this is essentially stateless: we can apply it to any Image
+we want and get useful results.
+
+We'll certainly want to add a layer on top of this which maintains the
+current guess about where the reference object is to be found in the
+current image - but I don't think we lose anything (performance,
+flexibility, etc) by building on top of this core.
+
+BTW:
+Here's a clearer way to write a big chunk of SSD::main\_init
+so you can see what's going on.  (Trivial change: reinsert the 
+conditional code.)
+
+\begin{verbatim}
+    float midx = (XVDx.width()-1)/2.0;
+    float midy = (XVDx.height()-1)/2.0;
+
+    Dx_refer = smoothDx(refer);
+    Dy_refer = smoothDy(refer);
+    XVImage <float> XVDx(Dx_refer);
+    XVImage <float> XVDy(Dy_refer);
+
+    // rotation
+    for (i=0;i<XVDx.width();i++)
+      for (j=0;j<XVDx.height();j++)
+	rotation[j][i] = XVDx[j][i]*(j-midy) - 
+	                 XVDy[j][i]*(i-midx); 
+
+    // scaling
+    for (i=0;i<XVDx.width();i++)
+      for (j=0;j<XVDx.height();j++)
+	scaling[j][i] = XVDx[j][i]*(i-midx) + 
+	             XVDy[j][i]*(j-midy); 
+
+    // aspect ratio
+    for (i=0;i<XVDx.width();i++)
+      for (j=0;j<XVDx.height();j++)
+	aspect[j][i] = XVDx[j][i]*(i-midx) - 
+	             XVDy[j][i]*(j-midy); 
+
+    // shearing
+    for (i=0;i<XVDx.width();i++)
+      for (j=0;j<XVDx.height();j++)
+	shearing[j][i] = XVDx[j][i]*(j-midy);
+
+    Amat = add_column(Amat,XVDx);   // X translation
+    Amat = add_column(Amat,XVDy);   // Y translation
+    Amat = add_column(Amat,rotation);
+    Amat = add_column(Amat,scaling);
+    Amat = add_column(Amat,aspect);
+    Amat = add_column(Amat,shearing);
+\end{verbatim}
+\end{itemize} % SSD
+\end{itemize} % Undone
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Text vs Pictures}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+For small examples, the simplest way to define a tracker is to
+use a graphical frontend to draw a flow diagram.  We believe that
+this doesn't scale up to large examples because:
+
+\begin{itemize}
+\item
+  Graphical languages provide no ability to abstract: we don't know
+  of any higher-order graphical languages.
+
+  Not being able to abstract restricts us to cut and paste (with all
+  the associated risk of error) and prevents us from proving
+  useful properties about our abstractions.
+
+\item
+  Graphical languages are static: we don't know how to make a 
+  picture vary with time or according to current conditons.
+
+  It's easy to make Pipe combinators dynamic --- and so to make flow
+  diagrams which adapt themselves to the current conditions.  A simple
+  example is a contour tracker (ie a collection of edge trackers)
+  which inserts and removes additional edge trackers as the contour
+  becomes more or less complicated.  Another example is a hand-eye
+  control system which uses different flow diagrams during different
+  phases of the task.
+
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{ToDo}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+
+\item
+deviceparse is useful but not very flexible.  I can select which
+device I want but then I have to settle for the default parameters
+supplied in config\_files/*.h.  An obvious fix would be to
+modify all device wrappers to take an argc/argv list which could be
+parsed using getopt or getopt\_long.  The you'd invoke SSD using something
+like:
+
+\begin{verbatim}
+bin/SSDtest -W40 -H40 -- -device=METEOR_MONO -width=320 -height=240 -synchronous
+\end{verbatim}
+
+
+\item
+Is XVision under the GPL or what?
+If not, are we allowed to include GPL'd code?
+
+\item
+It's all a terrible dream:
+\begin{verbatim}
+diff -bC2 IT_FG101.sunos.cc IT_FG101.solaris.cc
+\end{verbatim}
+
+Or to put it anothewr way: reuse by cut and paste is a maintenance 
+nightmare.  The differences between these files could (and should!)
+be handled by conditional compilation.  This is a particularily
+obvious example since we would never, ever want to have both
+of these in the system at once.
+
+\item
+Why does convolve keep crashing ...
+
+\item
+The bresenham code works like this:
+\begin{enumerate}
+\item
+  Generate an array of pointers.
+\item
+  Use the array of pointers to access the data we need.
+\end{enumerate}
+I suspect that it would be faster on modern hardware to merge the two
+into one - what's the cost of doing this?
+
+\item
+Exceptions are a big problem: libraries should not take it upon 
+themselves to kill the process - they should report problems to
+the main program and let it decide what to do.
+
+\item
+The pipeline design will use libraries in a different way:
+\begin{enumerate}
+\item
+  Much less use of side-effecting matrix and image operations.
+  If matrices and images are shared, it's hard to retain sanity
+  when doing update in place.
+
+  However, individual processing elements in the pipeline might well
+  make use of side-effecting operations on temporary values of their
+  own.  No harm in this!
+  
+\item
+  Much more heap allocation of fresh objects (because we're doing less
+  update in place).  In this case, we probably want to write custom
+  memory-management code to avoid the overhead of the generic ``new''
+  function.
+
+\item
+  Much less use of resize - if you're allocating memory, you might as
+  well allocate the right amount.
+
+\item
+  Probably less attention to special cases - we'll use generic functions
+  with many parameters instead of lots of different special cases.
+  So we ought to watch for optimisations such as:
+
+\begin{verbatim}
+    x * 1
+    x / 1
+    x + 0
+\end{verbatim}
+
+  around expensive operations like image and matrix ops.
+\end{enumerate}
+
+\item
+Any more of these pointless comments and I'm going to puke
+\begin{verbatim}
+#ifdef SUBSCRIPT_START_WITH_1  
+    /// If these functions appear, then SUBSCRIPT_START_WITH_1 is defined
+  [...]
+#else
+    /// If these functions appear, then SUBSCRIPT_START_WITH_1 is not defined
+  [...]
+#endif // SUBSCRIPT_START_WITH_1
+\end{verbatim}
+
+\item
+Can we kill all code associated with this?  Either all code in the
+system uses it - in which case its sole purpose in life is to spread
+conditional compilation throughout the system.  Or, it isn't used in
+which case its sole purpose is to embed dead code in the Matrix
+library.  Either way, it deserves to die.
+\begin{verbatim}
+#define SUBSCRIPT_START_WITH_1
+\end{verbatim}
+
+\item
+No, they don't belong in Matrix.hh either!
+They go in site\_config.h or site\_config.mk so that they
+can be turned on and off easily.
+\begin{verbatim}
+// Next two #defines used to be in Matrix.cc, but should be here.
+#define NO_BOUNDS_CHECK
+\end{verbatim}
+
+\item
+In Matrix.hh:
+\begin{verbatim}
+   /// Total storage size --  by default, we allocate double the
+   /// needed storage to allow room for resizing.
+\end{verbatim}
+Can't we just avoid resizing?
+Why not force operations that resize to just allocate a fresh object?
+
+\item
+Matrix::resize says:
+\begin{verbatim}
+  if (dataShared())
+    _panic("Cannot resize a matrix which has an outstanding submatrix");
+\end{verbatim}
+But you resize things all the time - how do you remain sane?
+
+\item
+Suppose SSD returns a number greater than the size of the image, what
+do we do?  Suppose ``find'' suggests a movement greater than the size
+of the image, do we believe it?  What do we do when we run off the
+edge of the image?
+
+\item
+track2 seems to crash when fed an odd image size.  Why?
+
+\item
+Add more error checking to matrix/image code so that we always get an
+error message when trying to combine objects of mismatched size.
+
+\item
+Link the XVision/haskell Makefile into the main Make tree
+(moving huge wads of code up into XVision/mk)
+
+\item
+Establish a standard about whether this function takes two corners
+or a corner and a size
+\begin{verbatim}
+void
+XWindow::rectangle(int x1, int y1, int width, int height, int color, bool filledvoid
+XWindow::rectangle(int x1, int y1, int x2, int y2, Video &v, int color)
+\end{verbatim}
+
+\item
+Move Acquire out of Devices and into Tools
+
+\item
+What the heck is this (Acquire.cc)
+\begin{verbatim}
+#define NCOLS ncols
+#define TOCOLS *=ncols
+#define TOCOLSNA *ncols
+\end{verbatim}
+
+\item
+Where do the numbers 1000.0 come from?
+\begin{verbatim}
+  short int dx = (int)(cos(angle)*1000.0 + 0.5);
+  short int dy = (int)(sin(angle)*1000.0 + 0.5);
+\end{verbatim}
+
+\item
+Split XVision.gc into lots of separate bits
+
+\item
+The Haskell folks want to make Haskell higher profile - it'd be good
+to publish something in CACM, Byte, Dr Dobbs, or whatever.
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{BTTV card}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Problems:
+\begin{itemize}
+\item
+   Lack of double buffering adds a lot of noise to the image.
+   (I'm running with no subsampling so I'm probably suffering more
+    than I need to.)
+
+   I grabbed the bttv stuff and installed it.
+   The code looks much, much better than the bt848 driver I'm currently
+   using - shame I can't get a video feed off it.
+
+\item
+   The images are always very very dark.
+   The brightness varies during the run - it actually starts ok then goes
+   dark after it's been running for a while.  If I point it at something
+   bright, it goes dark after a few seconds of good image.
+   I'm blaming autogain control and have an idea how to fix it.
+
+\item
+If I run ssd at full speed, the sample image freezes.
+It just doesn't get updated at all.
+Inserting a delay loop (just a simple for loop!) fixes the problem.
+
+My guess is that I'm already using almost all my memory bandwidth
+and the framegrabber just can't find enough spare memory cycles
+to do DMA.  
+
+Why am I using so much memory bandwidth?  Well, I allocate a fresh 
+bit of memory every time I grab or process an image so
+
+\begin{itemize}
+\item
+   At any one time, I have more memory in use.
+
+\item
+   I keep wandering around the address space instead of 
+   reusing the same memory over and over again.
+
+\item
+   I'm throwing a lot of pixels at the display.
+   Using the new subsample function to display only every 10th
+   picture doesn't help all that much so I think this is a minor
+   contribution.
+\end{itemize}
+
+If this guess is correct, the "no update in place" plan is in serious
+trouble.  And it'll get worse on the dual processor machine.
+
+Greg replies (about my memory bandwidth guess):
+{\it
+This is correct and is a general problem with older PPro systems.  The
+newer PII system susing the LX chipset and later are supposed to be
+better.  If you check out the Matrox for DataTranslations WEBsite
+they'll discuss the problem.
+}
+
+A little searching reveals some useful pages - not sure if they're what 
+Greg meant:
+\begin{verbatim}
+http://www.matrox.com/imaging/camera/camera_guide.htm
+\end{verbatim}
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Meteor card}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+While running a test on the robot, I managed to kill the robot's
+hard disk.  Here's some notes about what was happening:
+
+\begin{itemize}
+\item
+I was running a small pipes program which:
+\begin{itemize}
+\item
+Used the meteor card in METEOR\_MONO mode.
+\item
+May have been linked with libscout.a using NDirect and multithreaded
+mode.  multithreaded mode uses the pthread package.
+However, it was not using the robot at all and had not called any scout
+stuff so no threads will have been created.
+\item
+Entered and infinite loop and may have exhausted virtual memory.
+\end{itemize}
+
+\item
+pthreads warns:
+\begin{verbatim}
+- The current implementation uses the two signals SIGUSR1 and SIGUSR2,
+  so user-level code cannot employ them. Ideally, there should be two
+  signals reserved for this library. One signal is used for restarting
+  threads blocked on mutexes or conditions; the other is for thread
+  cancellation.
+\end{verbatim}
+
+This is a potential problem since Meteor.cc uses SIGUSR2.
+
+\item
+{\tt ftp://ftp.rwii.com/pub/linux/system/Meteor/README.Natoma-chipset}
+warns:
+\begin{verbatim}
+It has been discovered that the Natoma P6 chipset will lockup when
+a meteor is run in the YUV_PLANAR mode at any speed and resolution.
+The solution is to use the YUV_PACKED mode instead.
+
+The demo programs named vu and vu4 are based on the YUV_PLANAR mode
+and seem to reliably crash a Natoma based motherboard.  Meteor/contrib
+contains version 4.2 of vu4 that detects the Natoma motherboards and
+uses YUV_PACKED on these machines.
+
+It appears that the problem is that the Natoma can't handle more
+than multiple DMA channels running similtaniously as the YUV_PLANAR
+mode does.  I am not a meteor expert, but at first glance it seems
+that YUV_PLANAR is the only mode to do this.  The Natoma seems to
+otherwise have excellent performace with minimum fuss.  
+
+The Orion-GX based system that we have has been a major pain due 
+to extereme power and memory sensitivity.  It also requires that
+you go to full 4-way interleaving of very expensive memory to keep 
+up with the Natoma.
+
+Conclusion:  From our experience, unless you _REALLY_ need YUV_PLANAR,
+the Natoma is a better value.
+
+Cheers!
+Ty
+------------------------------------------
+Note:
+
+vu4 is now called mvid and version 4.2 mentioned above is included
+with meteor driver version 1.4b.
+
+Ty
+\end{verbatim}
+
+METEOR\_MONO corresponds to YUV\_PLANAR mode.
+
+\item
+The meteor device driver is capable of using 32 separate buffers
+as a ring buffer if we wish.  There is some kind of protocol
+which may allow Meteor.cc to halt the device driver until
+we've finished using the old pages.
+
+The Meteor.cc code seems to have some support for double buffering
+but the code seems to be vestigial.
+
+\begin{verbatim}
+#if (NOFRAMES == 2)
+#error "lets keep the number of frames at 1 for now"
+  if (BLORT->dataPtr == dataPtr1)
+    BLORT->dataPtr = dataPtr2;
+  else
+    BLORT->dataPtr = dataPtr1;       
+#endif
+\end{verbatim}
+
+Remind me why we don't work in push mode?
+
+\item
+The mmap call used to access the dma buffer specifies {\tt PROT\_READ | PROT\_WRITE}
+so we have write access into part of kernel memory.  Scary!
+
+Part of this memory includes this structure which is used by ioctl calls.
+
+\begin{verbatim}
+struct meteor_mem {
+		/* kernel write only  */
+	int	frame_size;	 /* row*columns*depth */
+	unsigned num_bufs;	 /* number of frames in buffer (1-32) */
+	u_long  frames_captured; /* total frames captured */
+	int     cur_frame;       /* index of most recent acquisition */
+	int     cur_field;       /* 0=even, 1=odd */
+		/* user and kernel change these */
+	int	lowat;		 /* kernel starts capture if < this number */
+	int	hiwat;		 /* kernel stops capture if > this number.
+				    hiwat <= numbufs */
+	unsigned active;	 /* bit mask of active frame buffers
+				    kernel sets, user clears */
+	int	num_active_bufs; /* count of active frame buffer
+				    kernel increments, user decrements */
+		/* reference to mmapped data */
+	caddr_t	buf;		 /* The real space (virtual addr) */
+} ;
+\end{verbatim}
+
+Interestingly, Meteor.cc doesn't seem to use this structure at all.
+Does it default to reasonable values?
+What happens if we write into it at random?
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Rapid prototyping}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+Haskell is strongly typed - bucks the trend of scripting languages.
+
+\item
+We want the code to look like the high level description
+
+Success: first implementation of SSD was based on a mathematical
+description of the algorithm to ADR.  At the time, ADR had forgotten
+everything he ever knew about matrix arithmetic so he just had to
+blindly transcribe the description on the whiteboard and hope it
+worked since he had no clue how to fix it if it didn't.
+It worked almost first time (after inserting calls to compressx, etc)
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{GreenCard Issues}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+ templates/polymorphism
+
+\item
+  Q: Why does calling this crash?
+\begin{verbatim}
+    cerr << '('
+\end{verbatim}
+  A: you have to link Hugs with g++ but even then it isn't
+  entirely reliable and you'd be better using printf.
+
+  WARNING: XVision.gc uses a C++ library so it can only be loaded
+  if you use hugs++ (which was linked using g++ instead
+  of gcc).
+
+\item
+  consider adding reference counts to images so that we don't
+  have to keep copying
+
+\item
+ figure out how to clean up after a crash
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Image processing}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+XVImage<int> is usually treated as XVImage<unsigned int>.
+Do we care?
+
+\item
+Using float or double in specifying an image is a dubious operation.
+Just how big will the result be?  How will the results get rounded?
+etc.  
+
+Of course, sometimes what all we have is a float and we want to grab
+an image.  In that case we have to round or truncate or whatever.
+The person writing the code that needs to round/truncate/... 
+probably has some idea which would be the right thing - so they
+should make that decision rather than relying on the image library 
+to do the right thing (because the chances are that it won't).
+This is a bit more work - but if it makes people think about
+rounding issues, that's a Good Thing.
+
+A minimal fix would be to provide a version of each operation which
+takes int arguments so it's easy to predict exactly what you'll get.
+Then we can redefine the float versions in terms of these ops and
+gradually switch over to using the new ops as we examine each piece of
+code.
+
+A variant on this problem is the problems with image grabs producing
+different sized results depending on the angle --- we ought to be able
+to fix this up at the same time.
+
+
+\item
+\begin{verbatim}
+-- Note: these don't do anything sensible for XVImage<int> (ie Image)
+%fun scale :: (Double,Double) -> Image -> Image
+
+-- ToDo: is max2(max2(r,g),b) a good conversion?
+%fun colourToBW :: Image -> Image
+
+-- ToDo: either this has to copy the image or images have to 
+-- have reference counts in them.
+%fun currentImage :: Mpeg -> IO Image
+
+These operations make no sense on XVImage<int>
+	 , map (plusInt 50) is
+	 , map (plusInt (-50)) is
+	 , map (\ x -> plusImage x x) is
+
+These operations do the wrong thing on XVImage<int>
+         , map (scale (0.5,0.5)) is
+	 , map (reduce_resolution (2,2)) is
+
+This crashes at the moment - probably a bad mask value (==0 is bad)
+--	 , map (convolve1 mask) is
+\end{verbatim}
+
+\item
+  consider adding reference counts to images so that we don't
+  have to keep copying
+
+\item
+A:
+  scale and reduce\_resolution don't work on XVImage<int> do they?
+  Getting randomly coloured pixels that look vaguely like the image
+  is the expected result isn't it?
+
+  (At least, not if the image is a 24bit colour)
+
+G:
+  Should work for gray-sacle images (0-255), but not for color.
+
+\item
+I just added these functions:
+\begin{verbatim}
+  convolve     :: Mask -> Image -> Image
+  gaussianMask :: (Int,Int) -> Double -> Mask
+\end{verbatim}
+
+where Mask is a different type from Image (though it has an identical
+representation).
+
+Note: I'm omitting the "transpose" flag when calling convolve since 
+a transposed convolution prints this error message.
+\begin{verbatim}
+    cout << "Transpose on convolution still needs to be fixed!" << endl;
+\end{verbatim}
+
+\item
+A:
+  My conversion to from colour to B\&W is based on compute\_intensity
+   which uses   
+\begin{verbatim}
+     max2(max2(r,g),b)
+\end{verbatim}
+  Is that a good choice?  I was expecting something more like this:
+\begin{verbatim}
+     r+g+b
+\end{verbatim}
+  or, more generally,
+\begin{verbatim}
+     A*r + B*g + C*b
+\end{verbatim}
+  for suitable constants A, B and C.
+
+G:
+   You probably want to use "luminance" instead of intensity ---
+luminance take the average of the three bands.
+
+\item
+Re: use of double in inner product to avoid integer overflow.
+
+gcc supports 64 bit ints - which ought to be large enough to avoid
+overflow.  I've no idea what performance is like but it's useful to
+know that there is a choice.
+
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Consoles}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+  we ought to name the window when we create it
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{SSD}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+(In Haskell) find ought to round its coordinates before it starts 
+and round its final result - since that's the fundamental
+accuracy of image grabbing
+
+\item
+ssd algorithms take current scale as an argument because they
+have to multiply result by that scale when they're all done.
+
+\item
+Might be interesting to measure convergence rate for various starting
+points/parameters for various images.
+
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Warnings/coding style}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+ Here's one of the most worrying warnings I'm getting:
+
+\begin{verbatim}
+   tst2.cc: In function `int & foo(int)':
+   tst2.cc:6: warning: reference to local variable `j' returned
+\end{verbatim}
+
+\item
+Lots of code duplication - evidence that the architecture is wrong somehow
+
+\item
+Use explicit casts to disambiguate comparisions of signed and
+unsigned values.
+
+Note: ANSI C and traditional C disambiguate in different ways - and
+ I'll bet no-one could tell me which is which.
+
+\item
+I'm not convinced anymore that the interface (of Video) is really
+well-designed, but we can figure that out later.
+
+\item
+There's a lot of crud in the interfaces  like this:
+\begin{verbatim}
+  XVImage<T> &scale(XVImage<T> &target, double sx, double sy) const;
+  XVImage<T> &Scale(XVImage<T> &target, double sx, double sy) const {
+    return scale(target, sx, sy);
+  }
+\end{verbatim}
+
+Since calling Scale is 100\% identical to calling scale, I propose we
+kill one of them and fix up all the code to match.
+
+we need a convention --- names uppercase or lowercase?
+There is a tendency to start method names with lowercase 
+in most classes. (with the exception of class names and constructors,
+of course)
+
+\item
+replace that irritating "stupid\_bool" nonsense with bool.
+If this doesn't work (but it will), I'll replace bool with xvBool
+or some such name. 
+
+\item
+Replace "unsigned \_later\_stages" with "struct StageFlags \_later\_stages"
+where StructFlags is defined using bit fields in the standard way.
+Code is cleaner and more obvious.
+Changes like not using bit fields (a very doubtful optimisation) become
+easy to consider.
+
+\item
+Rename dialate -> dilate
+
+\item
+Delete FACTORPOW and FACTOR which aren't used.
+
+\item
+G:
+  The thing is, the code I wrote for this *should* to my mind be the
+  right code --- the col call creates a temporary wrapper for the column
+  that allows us to operate on it and then throw away the wrapper when
+  we're done. 
+
+A:
+  But if the new code does the same and it kills a warning, then it \_is\_ the
+  right code.  Even if the code is slightly uglier, it \_is\_ the right code
+  because we can compile with lots of warnings and catch lots of errors
+  early in development.
+
+\item
+SSD.cc seems to contain a fair bit of code that operates on
+Images and Matrices.  Let's put it where it belongs!
+\begin{verbatim}
+Matrix& add_column(Matrix &x, const ColVector &c)
+Matrix &add_column(Matrix &x, const Image &I)
+template <class T>
+Matrix &add_column(Matrix &x, const XVImage<T> &I)
+
+void erode(ColVector &oldv,int ncols)
+void dialate(ColVector &oldv,int ncols)  // misspelt!!
+
+Image &Dx(const Image& imag,Image& targ)
+Image &Dy(const Image& imag,Image &targ)
+Image &compressx(const Image &imag,Image &targ)
+Image compressy(const Image &imag)
+Image smoothDx(const Image& image)
+Image smoothDy(const Image& image)
+Image &smoothDx(const Image& image,Image &targ)
+Image &smoothDy(const Image& image,Image &targ)
+
+void Box(Image &im,int center_x,int center_y,int size_x,int size_y)
+\end{verbatim}
+
+\item
+This looks highly dubious (from SSD)
+\begin{verbatim}
+#define Txx int
+#include "XVImage.icc"
+#undef Txx
+\end{verbatim}
+
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{CVS/GNU Make}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+The essential differences (from IMakefiles) are:
+\begin{itemize}
+\item
+ Makefiles aren't machine generated
+\item
+ you don't have to reconfig for changes to propagate
+  - the Makefiles are always up to date
+\item
+ you can edit local Makefiles without fear of then being overwritten
+\item
+  there's one less level of indirection - so it ought to be
+  easier to understand the Makefiles
+\end{itemize}
+
+\item
+Long term, we need to maintain a clearer separation of source files
+ and machine generated files.
+
+\item
+Symbolic links to includes so you have just one -I\$(XV)/include.
+Building one big library vs building 10 separate ones
+
+\item
+A:
+   I blindly added this to the cvs tree cos it was there... but
+   I suspect most of it is machine generated (besides having a daft name).
+   Can you confirm?  What command (in the old makefiles) would build
+   these files?
+
+     XVision/src/Devices/doc++umentation/*.html
+
+G:
+   Yes, it is machine generated --- ask Zach Dodds what generated it  ...
+
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Admin}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{verbatim}
+Don't build on an NFS mounted disk - work in /tmp
+
+Of course, microwave has a much bigger problem than speed - it's clock
+is slightly behind the NFS server it uses for /export/home/xvision
+so "make" is virtually unusable because I keep getting messages like:
+
+make: *** File `../../../src/Tools/XVImage.hh' has modification time in the 
+future
+
+This is especially bad with automatically generated dependency files
+because the files its using tend to be very freshly created.
+\end{verbatim}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Misc}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+\item
+\begin{verbatim}
+I suspect your seg fault at the end is because the mpeg ends ---- its
+supposed to rewind but for some reason the mpeg library doesn't do
+this under linux.
+\end{verbatim}
+
+\item
+\begin{verbatim}
+I'm creating MPEG2 (by deleting huge chunks of stuff from MPEG).
+Anything I don't think I need dies. 
+\end{verbatim}
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Design/Software Engineering Issues}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+
+\item What should the interfaces/conceptual model for tracking look
+like?  How can we explore this in a high level language using
+low-level support?  What are the basic concepts and interfaces for
+doing this stuff?
+
+\item To what extent can we prototype in Haskell yet reflect the
+results back to C++ and maintain interoperability at all levels?
+
+\item What should the interface back to images look like?  How to make
+the abstraction of floating point numbers and general image deformations
+fit the limitations of a discrete rectangular grid so that coding is
+easy and obvious, but precision and efficiency are preserved?  {\it Is
+this a question that we can answer effectively at the Haskell level?}
+
+\item Suppose that we introduce controllable pipeline modules into the
+system --- how does this affect design?  Can it be made as efficient
+as the current implementation?
+
+\end{itemize}
+
+
+\end{document}

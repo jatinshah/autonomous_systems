@@ -1,0 +1,85 @@
+\documentclass[12pt]{article}
+\bibliographystyle{plain}
+\usepackage[dvips]{graphicx}
+\usepackage{program}
+\newcommand{\institute}[1]{\emph{#1}}
+\title{Blob-Tracker using FVision and XVision2} 
+\author{Jatin D. Shah} 
+\date{\today}
+
+\newtheorem{defn}{Definition}[section]
+\begin{document}
+\maketitle
+\section{Introduction}
+\par A blob-tracker tracks the motion of a region of specific color in a video sequence. The region is generally described as a rectangle or a circle. In this project, the blob tracker assumes that the region to be tracked is rectangular. The tracker samples a small window where it expects to find the blob. Then the blob is identified using suitable functions from a vision library. This process is repeated every frame by changing the location of the window to match the motion of the blob tracker. 
+\par In this project, I have implemented a blob-tracker in Haskell. The vision library used is a C++ library, XVision2; these library functions were accessed in Haskell using FVision, which is an interface to the XVision2 through GreenCard.
+\section{Parts of Blob Tracker}
+\par As described above, once the user clicks on a blob, a small rectangular region around the blob of size {\tt blobSize} centered at the position clicked is sampled. The FVision function {\tt getColorSelector} returns the color of this region. The type of this function is: $$\mbox{\tt getColorSelector :: ImageRGB -> ColorSelector}$$ and it is defined in {\tt NXVision2.gc}. The feedback loop described in the next section described in the next section tracks the motion of a blob of the color returned by {\tt getColorSelector}.
+\subsection{Feedback Loop}
+\par This part of the program attempts to locate the present position of the blob using its position in the previous frame and the color of the blob. It is implemented using FRP primitive {\tt loopB} in file {\tt FRPExtra.hs}. A skeleton of the program is code is shown below\footnote{This is not the actual program code}:
+\begin{verbatim}
+newXY = 
+      loopB (\newXY ->
+         let
+           positionX = (centerX) 
+                            `delayB` (fst (derefB newXY))
+           positionY = (centerY) 
+                            `delayB` (snd (derefB newXY))
+           ...
+           window = getRegion video positionX positionY windowSize windowSize
+           (blobX,blobY,blobW,blobH) = stepBlob2 positionX positionY 
+                                                 window color
+           ...
+           newX = positionX + blobX + blobH/2
+           newY = positionY + blobY + blobW/2
+         in
+           pairZ newX newY
+          )
+\end{verbatim}
+\par In the code shown above {\tt centerX} and {\tt centerY} is the location clicked by the user. {\tt loopB} implements the feedback loop where position of the loop (represented by {\tt positionX/Y} and {\tt newX/Y})is fed back to the system.
+\par The function {\tt getRegion} cuts out a window from the image and the function {\tt stepBlob2} find the blob in the window cut by {\tt getRegion}. These are FVision functions (defined in file {\tt NXVision2.gc}).
+\subsection{Motion Prediction}
+\par Here it is assumed that the blob is moving with a constant velocity so we only try to approximate the first derivative of position to find the position of the blob. The {\tt derivativeB} function from FRP is not used as John Peterson has doubts if it will work. Instead, last two positions of the blob are tracked and the first derivative is approximated from those positions. The basic structure of the new code is shown below:
+\begin{verbatim}
+newXY = 
+        loopB (\newXYref ->
+            let
+                    position0X = (centerX) 
+                                    `delayB` (fst (derefB newXYref))
+                    position1X = position0X
+                                    `delayB` (snd (derefB newXYref))
+                    ...
+
+                    dispX = position0X - position1X
+                    predictedPositionX = position0X + dispX
+                    ...
+              )
+\end{verbatim}
+\par In this case, {\tt position0X} and {\tt position1X} are the two previous positions of the blob ({\tt position0X} being the more recent position)
+\par These positions are used to find the {\tt predictedPositionX/Y} which are passed to the tracker instead of the previous positions.
+\subsection{Adaptive Window Resizing}
+\par It may happen that inspite of motion prediction, the blob tracker may lose track of the blob. In such a situation, one might try to find the blob in the entire image. But this can be very slow. A better strategy would be to increase the window size by a small factor until the tracker finds the blob. The window size can later be decreased once the tracker has begun to track the blobs properly.
+\par The code shown below achieves that\footnote{In the actual code, we wait if we do not find a blob for {\tt threshold} consecutive frames. This has to be done because {\tt stepBlob2} sometimes erroneously returns that it has not found the blob even when it is tracking the blob properly.}
+\begin{verbatim}
+newXY = loopB (\newXYref ->
+            let
+                ...
+                (blobX,blobY,blobH,blobW) = stepBlob2 ...
+                dataError = (blobX<*0 ||* blobY<*0 ||* blobH<*0 ||* blobW<*0)
+                         ||* (blobH==*0 &&* blobW==*0)
+                newX=ifX dataError position0X (position0X+blobX+blobW/2)
+                newWinSz = if dataError 
+                              (changeWinSz oldWinSz percent)
+                              (changeWinSz oldWinSz (-percent))
+                ...
+              )
+\end{verbatim}
+\par If the function {\tt stepBlob2} returns negative values implying that blob is not found then position of the blob is not changed. Further, if {\tt stepBlob2} is unable to find the blob then window size is increased.
+\section{Implementation Issues}
+There are several issues regarding implementation of this blob tracker in Haskell. The program runs extremely slowly in both hugs and GHC implementation of Haskell. 
+\subsection{Space Leak in FRP}
+\par It seems that the implementation of the program I have discussed in this paper suffers from some kind of space leak problem which I was unable to detect. The problem is aggravated if I used more graphics primitives. It should be noted that the space leak is present even if the program is compiled using GHC.
+\subsection{Choosing a Window Size}
+\par Ideally, the algorithm for changing the window size should converge at a that size which minimizes the number of {\it no blob found} returns by {\tt stepBlob2}. But the algorithm described in this paper is unable to do this. My algorithm, decreases the window size to minimum possible if it is tracking properly and increases it if it fails to track. Thus, in this implementation, proper tracking of by the program requires that the window size entered by the user is appropriate. Since we are using first order motion prediction, we will be able to track all blobs moving with constant velocities with window sizes about the size of the blob. Window sizes about the size of the blob will be sufficient for accelerated blobs once we incorporate second-order motion prediction.
+\par If the window size is smaller than the object, then {\tt stepBlob2} returns the approximately entire window as blob. The window sizes should be increased in this situation as well.
+\end{document}
